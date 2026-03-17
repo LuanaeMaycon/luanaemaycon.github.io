@@ -1,0 +1,135 @@
+// ====== CONFIGURAÇÕES (já preenchidas pra vocês) ======
+const WEDDING_DATE_ISO = "2027-05-22T16:30:00-03:00";
+
+// WhatsApps para receber confirmações (dois números)
+const WHATSAPP_NUMBERS = ["5544999873733", "5544999362108"];
+
+// Links do Google Maps (já prontos via query)
+const MAPS_CERIMONIA = "https://www.google.com/maps?q=Rua%20Mitsuzo%20Taguchi%20671%20Vila%20Nova%20Maring%C3%A1%20PR%2087045110";
+const MAPS_RECEPCAO  = "https://www.google.com/maps?q=Avenida%20Colombo%2010786%20Jd%20Ol%C3%ADmpico%20Maring%C3%A1%20PR%2087070000";
+// ========================================
+
+document.getElementById("mapsCerimonia").href = MAPS_CERIMONIA;
+document.getElementById("mapsRecepcao").href = MAPS_RECEPCAO;
+
+// Contagem regressiva
+const target = new Date(WEDDING_DATE_ISO).getTime();
+
+function pad2(n){ return String(n).padStart(2,"0"); }
+
+function tick(){
+  const now = Date.now();
+  let diff = target - now;
+  if(diff < 0) diff = 0;
+
+  const d = Math.floor(diff / (1000*60*60*24));
+  const h = Math.floor((diff % (1000*60*60*24)) / (1000*60*60));
+  const m = Math.floor((diff % (1000*60*60)) / (1000*60));
+  const s = Math.floor((diff % (1000*60)) / 1000);
+
+  document.getElementById("d").textContent = d;
+  document.getElementById("h").textContent = pad2(h);
+  document.getElementById("m").textContent = pad2(m);
+  document.getElementById("s").textContent = pad2(s);
+}
+
+setInterval(tick, 1000);
+tick();
+
+// RSVP (salva localmente + lista)
+const form = document.getElementById("rsvpForm");
+const notice = document.getElementById("notice");
+const savedList = document.getElementById("savedList");
+
+function loadRSVP(){
+  try{ return JSON.parse(localStorage.getItem("rsvp_list") || "[]"); }
+  catch{ return []; }
+}
+
+function saveRSVP(list){
+  localStorage.setItem("rsvp_list", JSON.stringify(list));
+}
+
+function showNotice(msg){
+  notice.textContent = msg;
+  notice.style.display = "block";
+}
+
+function renderSaved(){
+  const list = loadRSVP();
+  if(list.length === 0){
+    savedList.innerHTML = "<p class='muted small'>Nenhuma confirmação salva neste aparelho ainda.</p>";
+    return;
+  }
+
+  savedList.innerHTML = list.slice().reverse().map(item => `
+    <div class="savedItem">
+      <strong>${escapeHtml(item.nome)}</strong><br/>
+      Pessoas: ${item.qtd}<br/>
+      ${item.fone ? `Telefone: ${escapeHtml(item.fone)}<br/>` : ""}
+      ${item.obs ? `Obs: ${escapeHtml(item.obs)}<br/>` : ""}
+      <span class="muted small">Salvo em: ${new Date(item.at).toLocaleString("pt-BR")}</span>
+    </div>
+  `).join("");
+}
+
+function escapeHtml(str){
+  return String(str)
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+form.addEventListener("submit", (e) => {
+  e.preventDefault();
+
+  const data = new FormData(form);
+  const payload = {
+    nome: (data.get("nome") || "").toString().trim(),
+    qtd: Number(data.get("qtd") || 1),
+    fone: (data.get("fone") || "").toString().trim(),
+    obs: (data.get("obs") || "").toString().trim(),
+    at: Date.now()
+  };
+
+  const list = loadRSVP();
+  list.push(payload);
+  saveRSVP(list);
+
+  form.reset();
+  form.querySelector("input[name='qtd']").value = 1;
+
+  showNotice("Presença confirmada e salva neste aparelho 🤍");
+  renderSaved();
+});
+
+// Botão WhatsApp (abre o envio — você escolhe para qual número enviar)
+document.getElementById("btnWhats").addEventListener("click", () => {
+  const data = new FormData(form);
+  const nome = (data.get("nome") || "").toString().trim();
+  const qtd  = (data.get("qtd") || "1").toString().trim();
+  const fone = (data.get("fone") || "").toString().trim();
+  const obs  = (data.get("obs") || "").toString().trim();
+
+  const texto =
+`Olá! Confirmação de presença:
+Nome: ${nome || "-"}
+Pessoas: ${qtd || "-"}
+Telefone: ${fone || "-"}
+Obs: ${obs || "-"}
+
+Cerimônia: Capela N. Sra. Aparecida — 16:30
+Recepção: Buffet Requinte Plus
+
+(Enviado pelo site do casamento 💙✨)`;
+
+  // Abre os dois WhatsApps em abas separadas (assim os dois recebem)
+  WHATSAPP_NUMBERS.forEach(num => {
+    const url = `https://wa.me/${num}?text=${encodeURIComponent(texto)}`;
+    window.open(url, "_blank", "noopener");
+  });
+});
+
+renderSaved();
